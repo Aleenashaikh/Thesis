@@ -3,6 +3,7 @@ import Navbar from "./components/Navbar";
 import UploadScreen from "./components/UploadScreen";
 import RecordsScreen from "./components/RecordsScreen";
 import LoginScreen from "./components/LoginScreen";
+import { getApiUrl } from "./config/api";
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -14,9 +15,10 @@ export default function App() {
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [fetchError, setFetchError] = useState("");
 
-  // Centralized API call helper
+  // Centralized API call helper with environment-based URL
   const apiCall = useCallback(async (path, options = {}) => {
-    const res = await fetch(`/api${path}`, options);
+    const url = getApiUrl(path);
+    const res = await fetch(url, options);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(data.error || `Request failed (${res.status})`);
