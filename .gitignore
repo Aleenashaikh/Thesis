@@ -82,6 +82,13 @@ cover/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
 
+# Archive files
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
 # YOLO / ML runs & training logs
 runs/
 wandb/

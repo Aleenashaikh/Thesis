@@ -1,19 +1,31 @@
-// Base URL from Vite environment variables (VITE_API_URL or VITE_BACKEND_URL)
+// Base URL from Vite build-time defines or environment variables
 const rawBaseUrl = (
+  (typeof __BACKEND_URL__ !== "undefined" && __BACKEND_URL__) ||
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_BACKEND_URL ||
+  import.meta.env.BACKEND_URL ||
+  import.meta.env.API_URL ||
+  (typeof process !== "undefined" && process.env?.VITE_API_URL) ||
   ""
 ).trim().replace(/\/+$/, "");
+
+// Helpful browser console log for verification
+if (typeof window !== "undefined") {
+  console.log(
+    "[LithoScan AI] API Backend Target:",
+    rawBaseUrl ? rawBaseUrl : "(Relative /api fallback)"
+  );
+}
 
 /**
  * Returns the fully qualified API URL for a given endpoint.
  *
  * Examples:
- * - When VITE_API_URL="https://backend.vercel.app":
+ * - When backend URL is set to "https://backend.vercel.app":
  *     getApiUrl("/login")       => "https://backend.vercel.app/api/login"
  *     getApiUrl("/api/login")   => "https://backend.vercel.app/api/login"
  *     getApiUrl("/cases")       => "https://backend.vercel.app/api/cases"
- * - When VITE_API_URL is unset (local development with Vite proxy):
+ * - When backend URL is unset (local development with Vite proxy):
  *     getApiUrl("/login")       => "/api/login"
  *     getApiUrl("/api/login")   => "/api/login"
  */
@@ -29,7 +41,7 @@ export function getApiUrl(endpoint) {
     return cleanEndpoint;
   }
 
-  // Handle case where user provided base URL already ending with /api
+  // Handle case where user provided a base URL already ending with /api
   if (rawBaseUrl.endsWith("/api")) {
     return `${rawBaseUrl}${cleanEndpoint.slice(4)}`;
   }
