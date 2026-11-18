@@ -82,20 +82,6 @@ cover/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
 
-# ==============================================================================
-# Machine Learning Weights & Large Artifacts
-# ==============================================================================
-*.pt
-*.pth
-*.onnx
-*.bin
-*.safetensors
-*.engine
-*.weights
-*.tflite
-*.h5
-*.pkl
-
 # YOLO / ML runs & training logs
 runs/
 wandb/
