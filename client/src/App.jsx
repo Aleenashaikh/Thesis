@@ -2,40 +2,31 @@ import { useEffect, useState, useCallback } from "react";
 import Navbar from "./components/Navbar";
 import UploadScreen from "./components/UploadScreen";
 import RecordsScreen from "./components/RecordsScreen";
-
-const DEFAULT_PASSCODE = "Al2025@sh";
+import LoginScreen from "./components/LoginScreen";
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => sessionStorage.getItem("isAuthenticated") === "true"
+  );
   const [currentScreen, setCurrentScreen] = useState("upload"); // "upload" | "records"
   const [activeRecordId, setActiveRecordId] = useState(null);
-  const [passcode, setPasscode] = useState(
-    () => sessionStorage.getItem("passcode") || DEFAULT_PASSCODE
-  );
   const [records, setRecords] = useState([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [fetchError, setFetchError] = useState("");
 
-  // Centralized API call helper with passcode
-  const apiCall = useCallback(
-    async (path, options = {}) => {
-      const res = await fetch(`/api${path}`, {
-        ...options,
-        headers: {
-          "x-passcode": passcode,
-          ...(options.headers || {}),
-        },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || `Request failed (${res.status})`);
-      }
-      return data;
-    },
-    [passcode]
-  );
+  // Centralized API call helper
+  const apiCall = useCallback(async (path, options = {}) => {
+    const res = await fetch(`/api${path}`, options);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || `Request failed (${res.status})`);
+    }
+    return data;
+  }, []);
 
   // Load records from server
   const loadRecords = useCallback(async () => {
+    if (!isAuthenticated) return;
     setLoadingRecords(true);
     setFetchError("");
     try {
@@ -49,12 +40,14 @@ export default function App() {
     } finally {
       setLoadingRecords(false);
     }
-  }, [apiCall]);
+  }, [apiCall, isAuthenticated]);
 
-  // Initial load
+  // Initial load when authenticated
   useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
+    if (isAuthenticated) {
+      loadRecords();
+    }
+  }, [isAuthenticated, loadRecords]);
 
   // Handle successful upload in Screen 1
   function handleAnalyzeSuccess(newRecord) {
@@ -74,6 +67,17 @@ export default function App() {
     );
   }
 
+  // Handle logout
+  function handleLogout() {
+    sessionStorage.removeItem("isAuthenticated");
+    setIsAuthenticated(false);
+  }
+
+  // If not authenticated, show clinical PIN login screen
+  if (!isAuthenticated) {
+    return <LoginScreen onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="app-layout">
       {/* Top Application Bar */}
@@ -81,15 +85,12 @@ export default function App() {
         currentScreen={currentScreen}
         setCurrentScreen={(screen) => {
           setCurrentScreen(screen);
-          // If switching to records from navbar, reset activeRecordId so user lands on all records list
           if (screen === "records") {
             setActiveRecordId(null);
           }
         }}
         recordsCount={records.length}
-        passcode={passcode}
-        setPasscode={setPasscode}
-        onRefreshRecords={loadRecords}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Viewport */}

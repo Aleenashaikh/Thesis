@@ -16,7 +16,7 @@ cloudinary.config({
 });
 
 const INFERENCE_URL = process.env.INFERENCE_URL || "http://localhost:8000";
-const PASSCODE = process.env.PASSCODE || "";
+const LOGIN_PIN = process.env.LOGIN_PIN || process.env.PIN || "7860";
 
 // ---------- database ----------
 const caseSchema = new mongoose.Schema(
@@ -57,12 +57,6 @@ const upload = multer({
     cb(/^image\/(jpeg|png)$/.test(file.mimetype) ? null : new Error("Only JPG or PNG images"), true),
 });
 
-function requirePasscode(req, res, next) {
-  if (!PASSCODE) return next();
-  if (req.get("x-passcode") === PASSCODE) return next();
-  res.status(401).json({ error: "Wrong or missing passcode" });
-}
-
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function uploadToCloudinary(buffer) {
@@ -77,7 +71,18 @@ function uploadToCloudinary(buffer) {
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-app.post("/api/analyze", requirePasscode, upload.single("image"), async (req, res) => {
+app.post("/api/login", (req, res) => {
+  const { pin } = req.body || {};
+  if (!pin) {
+    return res.status(400).json({ error: "PIN is required" });
+  }
+  if (String(pin).trim() === String(LOGIN_PIN).trim()) {
+    return res.json({ ok: true, message: "Authentication successful" });
+  }
+  return res.status(401).json({ error: "Incorrect PIN. Please try again." });
+});
+
+app.post("/api/analyze", upload.single("image"), async (req, res) => {
   try {
     const modality = String(req.body.modality || "").toUpperCase();
     if (!["CT", "XRAY"].includes(modality)) return res.status(400).json({ error: "modality must be CT or XRAY" });
@@ -119,17 +124,17 @@ app.post("/api/analyze", requirePasscode, upload.single("image"), async (req, re
   }
 });
 
-app.get("/api/cases", requirePasscode, wrap(async (_req, res) => {
+app.get("/api/cases", wrap(async (_req, res) => {
   res.json(await Case.find().sort({ createdAt: -1 }).limit(50));
 }));
 
-app.get("/api/cases/:id", requirePasscode, async (req, res) => {
+app.get("/api/cases/:id", async (req, res) => {
   const doc = await Case.findById(req.params.id).catch(() => null);
   if (!doc) return res.status(404).json({ error: "not found" });
   res.json(doc);
 });
 
-app.patch("/api/cases/:id/review", requirePasscode, async (req, res) => {
+app.patch("/api/cases/:id/review", async (req, res) => {
   const { verdict, notes } = req.body;
   if (!["correct", "partly", "incorrect"].includes(verdict)) return res.status(400).json({ error: "bad verdict" });
   const doc = await Case.findByIdAndUpdate(

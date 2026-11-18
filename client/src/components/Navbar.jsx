@@ -2,34 +2,19 @@ import { useState } from "react";
 import {
   UploadCloud,
   FileSpreadsheet,
-  Lock,
-  KeyRound,
   ShieldAlert,
   Activity,
-  CheckCircle2,
+  LogOut,
   X,
-  ChevronDown,
 } from "lucide-react";
 
 export default function Navbar({
   currentScreen,
   setCurrentScreen,
   recordsCount = 0,
-  passcode,
-  setPasscode,
-  onRefreshRecords,
+  onLogout,
 }) {
-  const [showPassModal, setShowPassModal] = useState(false);
-  const [tempPass, setTempPass] = useState(passcode);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
-
-  function handleSavePass(e) {
-    e.preventDefault();
-    setPasscode(tempPass);
-    sessionStorage.setItem("passcode", tempPass);
-    setShowPassModal(false);
-    onRefreshRecords();
-  }
 
   return (
     <>
@@ -68,7 +53,7 @@ export default function Navbar({
             </button>
           </nav>
 
-          {/* Right Tools: Passcode & Notice */}
+          {/* Right Tools: Clinical Disclaimer & Logout */}
           <div className="header-actions">
             <button
               className="disclaimer-trigger-btn"
@@ -79,17 +64,16 @@ export default function Navbar({
               <span className="hide-on-mobile">Clinical Protocol</span>
             </button>
 
-            <button
-              className={`passcode-pill-btn ${passcode ? "unlocked" : "locked"}`}
-              onClick={() => {
-                setTempPass(passcode);
-                setShowPassModal(true);
-              }}
-              title="Passcode Settings"
-            >
-              {passcode ? <KeyRound size={15} /> : <Lock size={15} />}
-              <span className="hide-on-mobile">{passcode ? "Unlocked" : "Set Passcode"}</span>
-            </button>
+            {onLogout && (
+              <button
+                className="logout-pill-btn"
+                onClick={onLogout}
+                title="Log out of clinical session"
+              >
+                <LogOut size={15} />
+                <span className="hide-on-mobile">Log Out</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -113,53 +97,6 @@ export default function Navbar({
           </div>
         )}
       </header>
-
-      {/* Passcode Modal */}
-      {showPassModal && (
-        <div className="modal-backdrop" onClick={() => setShowPassModal(false)}>
-          <div className="passcode-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="modal-title-wrap">
-                <KeyRound size={18} className="text-primary" />
-                <span className="modal-title">System Access Passcode</span>
-              </div>
-              <button className="icon-btn close-btn" onClick={() => setShowPassModal(false)}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSavePass} className="passcode-form">
-              <p className="modal-desc">
-                Enter your authorized clinical passcode to unlock case archives and run inference pipelines.
-              </p>
-              <div className="input-group">
-                <input
-                  type="password"
-                  placeholder="Enter passcode..."
-                  value={tempPass}
-                  onChange={(e) => setTempPass(e.target.value)}
-                  className="modern-input"
-                  autoFocus
-                />
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowPassModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  <CheckCircle2 size={16} />
-                  <span>Save & Unlock</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   );
 }

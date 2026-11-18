@@ -90,7 +90,7 @@ export default function UploadScreen({
         onAnalyzeSuccess(result);
       }
     } catch (err) {
-      setError(err.message || "Detection failed. Please check network and passcode.");
+      setError(err.message || "Detection failed. Please check your network connection.");
     } finally {
       setIsAnalyzing(false);
     }

@@ -24,7 +24,7 @@ Check http://localhost:8000/health. It shows the classifier and detector names i
 ## 2. Node server
 ```bash
 cd server
-cp .env.example .env     # fill in MONGO_URI, the three CLOUDINARY_ values, PASSCODE
+cp .env.example .env     # fill in MONGO_URI, the three CLOUDINARY_ values, LOGIN_PIN
 npm install
 npm start
 ```
@@ -41,7 +41,7 @@ Production: `npm run build` in `client/`. The Node server then serves `client/di
 ## Deploying on your domain
 - Run the model service and the Node server on the same machine (a small VPS with 2 to 4 GB RAM is enough; it runs on CPU, expect a few seconds per image).
 - Keep port 8000 closed to the internet. Only Node talks to it. Put Node behind HTTPS (Caddy or nginx).
-- Set `PASSCODE` and give it only to the urologists.
+- Set `LOGIN_PIN` (e.g. 7860) and give it only to authorized clinical personnel.
 
 ## Things to settle before real use
 - Ethics approval and consent for storing images. Cloudinary links made here are public but unguessable; use Cloudinary authenticated delivery if your approval needs stricter control.
