@@ -1,0 +1,25 @@
+{
+  "cls_backbone": "tf_efficientnetv2_s",
+  "cls_weights": "/kaggle/working/checkpoints/cls_tf_efficientnetv2_s_seed1_frac1.00.pt",
+  "cls_seed": 1,
+  "cls_synth_frac": 1.0,
+  "cls_thr": {
+    "CT": 0.9193974137306213,
+    "XRAY": 0.07557741552591324
+  },
+  "cls_T": {
+    "CT": 0.704474500175476,
+    "XRAY": 2.813568056482891
+  },
+  "crop_mode": "center",
+  "ct_cls_enabled": true,
+  "yolo_name": "yolo11s_960_synth_s1",
+  "yolo_weights": "/kaggle/working/yolo11s_960_synth_s1/weights/best.pt",
+  "yolo_imgsz": 960,
+  "yolo_synth": true,
+  "det_thr": {
+    "CT": 0.1819295734167099,
+    "XRAY": 0.1649782657623291
+  },
+  "det_fp_budget": 1.0
+}
