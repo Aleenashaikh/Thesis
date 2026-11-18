@@ -43,7 +43,25 @@ const caseSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-const Case = mongoose.model("Case", caseSchema);
+
+// avoid "OverwriteModelError" when the module is reused between invocations
+const Case = mongoose.models.Case || mongoose.model("Case", caseSchema);
+
+// Cached connection: reused across serverless invocations, and never
+// kills the process on failure (that would crash the function).
+let dbPromise;
+function connectDB() {
+  if (!dbPromise) {
+    dbPromise = mongoose
+      .connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000 })
+      .catch((e) => {
+        dbPromise = null;
+        console.error("MongoDB connection failed:", e.message);
+        throw e;
+      });
+  }
+  return dbPromise;
+}
 
 // ---------- app ----------
 const app = express();
@@ -69,6 +87,7 @@ function uploadToCloudinary(buffer) {
   });
 }
 
+// these two don't need the database
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 app.post("/api/login", (req, res) => {
@@ -80,6 +99,16 @@ app.post("/api/login", (req, res) => {
     return res.json({ ok: true, message: "Authentication successful" });
   }
   return res.status(401).json({ error: "Incorrect PIN. Please try again." });
+});
+
+// everything below needs MongoDB
+app.use(async (_req, _res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (e) {
+    next(e);
+  }
 });
 
 app.post("/api/analyze", upload.single("image"), async (req, res) => {
@@ -146,7 +175,7 @@ app.patch("/api/cases/:id/review", async (req, res) => {
   res.json(doc);
 });
 
-// serve the built React app in production (npm run build in /client)
+// serve the built React app when running as a normal server (npm run build in /client)
 const dist = path.join(__dirname, "..", "client", "dist");
 if (fs.existsSync(dist)) {
   app.use(express.static(dist));
@@ -155,10 +184,13 @@ if (fs.existsSync(dist)) {
 
 app.use((err, _req, res, _next) => res.status(err.status || 400).json({ error: err.message }));
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => app.listen(process.env.PORT || 5000, () => console.log("server up on", process.env.PORT || 5000)))
-  .catch((e) => {
-    console.error("MongoDB connection failed:", e.message);
-    process.exit(1);
-  });
+// Vercel imports this file and uses the exported app as the handler
+module.exports = app;
+
+// local dev / Render / Railway: start a normal server
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  connectDB()
+    .then(() => app.listen(PORT, () => console.log("server up on", PORT)))
+    .catch(() => process.exit(1));
+}
