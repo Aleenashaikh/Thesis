@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -14,41 +14,82 @@ import {
   Layers,
   Eye,
   EyeOff,
-  Sliders,
   Calendar,
   Save,
   Tag,
   FileCheck,
+  Zap,
+  RefreshCw,
 } from "lucide-react";
 import BoxedImage from "./BoxedImage";
 import ImageModal from "./ImageModal";
 
 export default function RecordDetailView({
-  record,
+  record: initialRecord,
   allRecords = [],
   onBack,
   onSelectRecord,
   onReviewSaved,
   apiCall,
 }) {
+  const [record, setRecord] = useState(initialRecord);
   const [viewMode, setViewMode] = useState("side-by-side"); // "side-by-side" | "detected" | "original"
   const [showBoxes, setShowBoxes] = useState(true);
   const [showConfidence, setShowConfidence] = useState(true);
   const [hoveredBoxIdx, setHoveredBoxIdx] = useState(null);
-  const [modalImage, setModalImage] = useState(null); // { src, boxes, title }
+  const [modalImage, setModalImage] = useState(null);
   const [copiedId, setCopiedId] = useState(false);
+
+  // Auto / manual detection state for pending cases
+  const isPending = !record.result || record.status === "pending";
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [detectError, setDetectError] = useState("");
+  const [detectSuccessMsg, setDetectSuccessMsg] = useState("");
 
   // Review Form state
   const [verdict, setVerdict] = useState(record.review?.verdict || "");
   const [notes, setNotes] = useState(record.review?.notes || "");
   const [saveStatus, setSaveStatus] = useState({ state: "idle", msg: "" }); // idle | saving | success | error
 
-  // Reset form when record changes
+  // Reset when initialRecord prop changes (e.g. from Prev/Next navigation)
   useEffect(() => {
-    setVerdict(record.review?.verdict || "");
-    setNotes(record.review?.notes || "");
+    setRecord(initialRecord);
+    setVerdict(initialRecord.review?.verdict || "");
+    setNotes(initialRecord.review?.notes || "");
     setSaveStatus({ state: "idle", msg: "" });
-  }, [record._id]);
+    setDetectError("");
+    setDetectSuccessMsg("");
+  }, [initialRecord]);
+
+  // Handler to run analysis on a pending case
+  const handleRunAnalysis = useCallback(async () => {
+    setIsDetecting(true);
+    setDetectError("");
+    setDetectSuccessMsg("");
+    try {
+      const updated = await apiCall(`/cases/${record._id}/run-analysis`, {
+        method: "POST",
+      });
+      setRecord(updated);
+      setDetectSuccessMsg("AI detection completed successfully! Please review the findings below.");
+      if (onReviewSaved) onReviewSaved(updated);
+    } catch (err) {
+      setDetectError(
+        err.message ||
+          "Model service is currently offline. Ensure ngrok / inference server is running on your computer, then try again."
+      );
+    } finally {
+      setIsDetecting(false);
+    }
+  }, [apiCall, record._id, onReviewSaved]);
+
+  // When a urologist opens a pending case, attempt detection automatically
+  useEffect(() => {
+    if (isPending && !isDetecting && !detectError) {
+      handleRunAnalysis();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record._id, isPending]);
 
   // Find index for Prev/Next navigation
   const currentIndex = allRecords.findIndex((r) => r._id === record._id);
@@ -78,6 +119,7 @@ export default function RecordDetailView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ verdict, notes }),
       });
+      setRecord(updated);
       setSaveStatus({ state: "success", msg: "Review successfully saved!" });
       if (onReviewSaved) onReviewSaved(updated);
       setTimeout(() => setSaveStatus({ state: "idle", msg: "" }), 3000);
@@ -124,9 +166,28 @@ export default function RecordDetailView({
             {record.modality === "XRAY" ? "X-Ray (KUB)" : "CT Slice"}
           </span>
 
+          <span
+            className={`record-status-pill ${
+              record.status === "reviewed"
+                ? "status-reviewed"
+                : record.status === "analyzed"
+                ? "status-analyzed"
+                : "status-pending"
+            }`}
+          >
+            {record.status === "reviewed"
+              ? "Reviewed"
+              : record.status === "analyzed"
+              ? "Analyzed"
+              : "Pending Analysis"}
+          </span>
+
           <span className="record-date-pill">
             <Calendar size={14} />
-            <span>{new Date(record.createdAt).toLocaleDateString()} {new Date(record.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>
+              {new Date(record.createdAt).toLocaleDateString()}{" "}
+              {new Date(record.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
           </span>
         </div>
 
@@ -154,6 +215,59 @@ export default function RecordDetailView({
         </div>
       </div>
 
+      {/* Pending Analysis Banner (Auto detection or retry) */}
+      {isPending && (
+        <div className="pending-case-banner">
+          <div className="pending-banner-content">
+            <div className="pending-icon-wrap">
+              {isDetecting ? (
+                <RefreshCw size={24} className="spin-icon text-primary" />
+              ) : (
+                <Clock size={24} className="text-amber" />
+              )}
+            </div>
+            <div className="pending-text-wrap">
+              <h4>
+                {isDetecting
+                  ? "Detecting Kidney Calculi with AI Model..."
+                  : "Scan Pending Analysis"}
+              </h4>
+              <p>
+                {isDetecting
+                  ? "Connecting to inference service on your model endpoint and running dual-stage detection..."
+                  : detectError
+                  ? detectError
+                  : "The model was offline when this scan was uploaded. Running automated detection now..."}
+              </p>
+            </div>
+          </div>
+          <button
+            className={`btn-primary btn-detect-now ${isDetecting ? "loading" : ""}`}
+            onClick={handleRunAnalysis}
+            disabled={isDetecting}
+          >
+            {isDetecting ? (
+              <>
+                <RefreshCw size={16} className="spin-icon" />
+                <span>Running Inference...</span>
+              </>
+            ) : (
+              <>
+                <Zap size={16} />
+                <span>Run Detection Now</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {detectSuccessMsg && (
+        <div className="alert-banner alert-success" style={{ marginBottom: "16px" }}>
+          <CheckCircle2 size={18} />
+          <span>{detectSuccessMsg}</span>
+        </div>
+      )}
+
       {/* Main Two-Column Layout: Visual Scans (Left/Center) + Review Panel (Right) */}
       <div className="detail-content-grid">
         {/* ======================================================== */}
@@ -166,6 +280,7 @@ export default function RecordDetailView({
               <button
                 className={`view-mode-btn ${viewMode === "side-by-side" ? "active" : ""}`}
                 onClick={() => setViewMode("side-by-side")}
+                disabled={isPending}
               >
                 <Layers size={15} />
                 <span className="tab-label-full">Original & Detected (Both)</span>
@@ -174,6 +289,7 @@ export default function RecordDetailView({
               <button
                 className={`view-mode-btn ${viewMode === "detected" ? "active" : ""}`}
                 onClick={() => setViewMode("detected")}
+                disabled={isPending}
               >
                 <Sparkles size={15} />
                 <span className="tab-label-full">Detected Only</span>
@@ -190,7 +306,7 @@ export default function RecordDetailView({
             </div>
 
             <div className="view-controls-right">
-              {viewMode !== "original" && (
+              {viewMode !== "original" && !isPending && (
                 <>
                   <button
                     className={`toggle-pill ${showBoxes ? "active" : ""}`}
@@ -215,9 +331,9 @@ export default function RecordDetailView({
                 onClick={() =>
                   setModalImage({
                     src: record.imageUrl,
-                    width: record.width,
-                    height: record.height,
-                    boxes: boxes,
+                    width: record.width || 800,
+                    height: record.height || 800,
+                    boxes: isPending ? [] : boxes,
                     title: `Case #${record._id.slice(-6)} · Full Examination`,
                   })
                 }
@@ -230,18 +346,20 @@ export default function RecordDetailView({
           </div>
 
           {/* Dual Image Grid (Both Original and Detected) */}
-          <div className={`scans-display-container layout-${viewMode}`}>
+          <div className={`scans-display-container layout-${isPending ? "original" : viewMode}`}>
             {/* 1. ORIGINAL SCAN */}
-            {(viewMode === "side-by-side" || viewMode === "original") && (
+            {(viewMode === "side-by-side" || viewMode === "original" || isPending) && (
               <div className="scan-card">
                 <div className="scan-card-header">
                   <div className="scan-card-title-group">
                     <span className="scan-card-title">Original Scan</span>
                     <span className="scan-pill original-pill">Raw Radiograph</span>
                   </div>
-                  <span className="scan-resolution-tag">
-                    {record.width} × {record.height} px
-                  </span>
+                  {record.width && record.height && (
+                    <span className="scan-resolution-tag">
+                      {record.width} × {record.height} px
+                    </span>
+                  )}
                 </div>
 
                 <div className="scan-image-viewport">
@@ -253,14 +371,18 @@ export default function RecordDetailView({
                 </div>
 
                 <div className="scan-card-footer">
-                  <span className="footer-note">Clean clinical radiograph without overlay annotations.</span>
+                  <span className="footer-note">
+                    {isPending
+                      ? "Awaiting model detection to generate stone localization overlay."
+                      : "Clean clinical radiograph without overlay annotations."}
+                  </span>
                   <button
                     className="text-btn-zoom"
                     onClick={() =>
                       setModalImage({
                         src: record.imageUrl,
-                        width: record.width,
-                        height: record.height,
+                        width: record.width || 800,
+                        height: record.height || 800,
                         boxes: [],
                         title: `Case #${record._id.slice(-6)} · Original Raw Scan`,
                       })
@@ -273,8 +395,8 @@ export default function RecordDetailView({
               </div>
             )}
 
-            {/* 2. DETECTED SCAN */}
-            {(viewMode === "side-by-side" || viewMode === "detected") && (
+            {/* 2. DETECTED SCAN (Shown only when analyzed) */}
+            {!isPending && (viewMode === "side-by-side" || viewMode === "detected") && (
               <div className="scan-card">
                 <div className="scan-card-header">
                   <div className="scan-card-title-group">
@@ -346,240 +468,275 @@ export default function RecordDetailView({
             </div>
 
             <div className="panel-body">
-              <p className="panel-instructions">
-                Validate the AI localization and classification. Record clinical observations for audit and quality assurance.
-              </p>
-
-              {/* Verdict Selector Options */}
-              <div className="verdict-options-grid">
-                <label
-                  className={`verdict-choice-card ${
-                    verdict === "correct" ? "selected verdict-correct" : ""
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="verdict"
-                    value="correct"
-                    checked={verdict === "correct"}
-                    onChange={() => setVerdict("correct")}
-                  />
-                  <div className="verdict-icon-wrap">
-                    <CheckCircle2 size={18} />
-                  </div>
-                  <div className="verdict-label-wrap">
-                    <span className="verdict-name">Correct</span>
-                    <span className="verdict-hint">Accurate localization</span>
-                  </div>
-                </label>
-
-                <label
-                  className={`verdict-choice-card ${
-                    verdict === "partly" ? "selected verdict-partly" : ""
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="verdict"
-                    value="partly"
-                    checked={verdict === "partly"}
-                    onChange={() => setVerdict("partly")}
-                  />
-                  <div className="verdict-icon-wrap">
-                    <AlertTriangle size={18} />
-                  </div>
-                  <div className="verdict-label-wrap">
-                    <span className="verdict-name">Partly Correct</span>
-                    <span className="verdict-hint">Minor boundary/count shift</span>
-                  </div>
-                </label>
-
-                <label
-                  className={`verdict-choice-card ${
-                    verdict === "incorrect" ? "selected verdict-incorrect" : ""
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="verdict"
-                    value="incorrect"
-                    checked={verdict === "incorrect"}
-                    onChange={() => setVerdict("incorrect")}
-                  />
-                  <div className="verdict-icon-wrap">
-                    <AlertCircle size={18} />
-                  </div>
-                  <div className="verdict-label-wrap">
-                    <span className="verdict-name">Incorrect</span>
-                    <span className="verdict-hint">False positive / missed</span>
-                  </div>
-                </label>
-              </div>
-
-              {/* Quick Tag Helper Chips */}
-              <div className="quick-tags-section">
-                <div className="quick-tags-label">
-                  <Tag size={13} />
-                  <span>Clinical remark presets:</span>
+              {isPending ? (
+                <div className="pending-review-placeholder">
+                  <Clock size={32} className="text-amber" />
+                  <h4>Awaiting AI Stone Detection</h4>
+                  <p>
+                    Once the scan is analyzed by the model, you can review and validate the detected regions and classification here.
+                  </p>
+                  <button
+                    className="btn-primary"
+                    onClick={handleRunAnalysis}
+                    disabled={isDetecting}
+                    style={{ marginTop: "8px" }}
+                  >
+                    {isDetecting ? (
+                      <>
+                        <RefreshCw size={15} className="spin-icon" />
+                        <span>Detecting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={15} />
+                        <span>Run Detection Now</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-                <div className="tags-wrap">
-                  {[
-                    "Accurate localization",
-                    "Missed calculus",
-                    "Bowel gas artifact",
-                    "Phlebolith confusion",
-                    "Small stone (<3mm)",
-                    "Sub-optimal contrast",
-                  ].map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className="preset-chip"
-                      onClick={() => appendNotePreset(tag)}
+              ) : (
+                <>
+                  <p className="panel-instructions">
+                    Validate the AI localization and classification. Record clinical observations for audit and quality assurance.
+                  </p>
+
+                  {/* Verdict Selector Options */}
+                  <div className="verdict-options-grid">
+                    <label
+                      className={`verdict-choice-card ${
+                        verdict === "correct" ? "selected verdict-correct" : ""
+                      }`}
                     >
-                      + {tag}
+                      <input
+                        type="radio"
+                        name="verdict"
+                        value="correct"
+                        checked={verdict === "correct"}
+                        onChange={() => setVerdict("correct")}
+                      />
+                      <div className="verdict-icon-wrap">
+                        <CheckCircle2 size={18} />
+                      </div>
+                      <div className="verdict-label-wrap">
+                        <span className="verdict-name">Correct</span>
+                        <span className="verdict-hint">Accurate localization</span>
+                      </div>
+                    </label>
+
+                    <label
+                      className={`verdict-choice-card ${
+                        verdict === "partly" ? "selected verdict-partly" : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="verdict"
+                        value="partly"
+                        checked={verdict === "partly"}
+                        onChange={() => setVerdict("partly")}
+                      />
+                      <div className="verdict-icon-wrap">
+                        <AlertTriangle size={18} />
+                      </div>
+                      <div className="verdict-label-wrap">
+                        <span className="verdict-name">Partly Correct</span>
+                        <span className="verdict-hint">Minor boundary/count shift</span>
+                      </div>
+                    </label>
+
+                    <label
+                      className={`verdict-choice-card ${
+                        verdict === "incorrect" ? "selected verdict-incorrect" : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="verdict"
+                        value="incorrect"
+                        checked={verdict === "incorrect"}
+                        onChange={() => setVerdict("incorrect")}
+                      />
+                      <div className="verdict-icon-wrap">
+                        <AlertCircle size={18} />
+                      </div>
+                      <div className="verdict-label-wrap">
+                        <span className="verdict-name">Incorrect</span>
+                        <span className="verdict-hint">False positive / missed</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Quick Tag Helper Chips */}
+                  <div className="quick-tags-section">
+                    <div className="quick-tags-label">
+                      <Tag size={13} />
+                      <span>Clinical remark presets:</span>
+                    </div>
+                    <div className="tags-wrap">
+                      {[
+                        "Accurate localization",
+                        "Missed calculus",
+                        "Bowel gas artifact",
+                        "Phlebolith confusion",
+                        "Small stone (<3mm)",
+                        "Sub-optimal contrast",
+                      ].map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className="preset-chip"
+                          onClick={() => appendNotePreset(tag)}
+                        >
+                          + {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Notes Textarea */}
+                  <div className="notes-group">
+                    <label className="input-label" htmlFor="review-notes">
+                      Specialist Clinical Notes
+                    </label>
+                    <textarea
+                      id="review-notes"
+                      className="modern-textarea"
+                      placeholder="Record anatomical location (e.g. proximal ureter, lower pole), calculus size, false positives, or specific notes..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={4}
+                      maxLength={2000}
+                    />
+                    <div className="textarea-footer">
+                      <span className="char-count">{notes.length} / 2000 chars</span>
+                    </div>
+                  </div>
+
+                  {/* Save Review Button & Status */}
+                  <div className="review-action-row">
+                    <button
+                      className="btn-save-review"
+                      disabled={!verdict || saveStatus.state === "saving"}
+                      onClick={handleSaveReview}
+                    >
+                      <Save size={16} />
+                      <span>
+                        {saveStatus.state === "saving" ? "Saving Review..." : "Save Clinical Review"}
+                      </span>
                     </button>
-                  ))}
-                </div>
-              </div>
 
-              {/* Notes Textarea */}
-              <div className="notes-group">
-                <label className="input-label" htmlFor="review-notes">
-                  Specialist Clinical Notes
-                </label>
-                <textarea
-                  id="review-notes"
-                  className="modern-textarea"
-                  placeholder="Record anatomical location (e.g. proximal ureter, lower pole), calculus size, false positives, or specific notes..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={4}
-                  maxLength={2000}
-                />
-                <div className="textarea-footer">
-                  <span className="char-count">{notes.length} / 2000 chars</span>
-                </div>
-              </div>
-
-              {/* Save Review Button & Status */}
-              <div className="review-action-row">
-                <button
-                  className="btn-save-review"
-                  disabled={!verdict || saveStatus.state === "saving"}
-                  onClick={handleSaveReview}
-                >
-                  <Save size={16} />
-                  <span>
-                    {saveStatus.state === "saving" ? "Saving Review..." : "Save Clinical Review"}
-                  </span>
-                </button>
-
-                {saveStatus.state === "success" && (
-                  <div className="save-feedback success">
-                    <CheckCircle2 size={16} />
-                    <span>{saveStatus.msg}</span>
+                    {saveStatus.state === "success" && (
+                      <div className="save-feedback success">
+                        <CheckCircle2 size={16} />
+                        <span>{saveStatus.msg}</span>
+                      </div>
+                    )}
+                    {saveStatus.state === "error" && (
+                      <div className="save-feedback error">
+                        <AlertCircle size={16} />
+                        <span>{saveStatus.msg}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-                {saveStatus.state === "error" && (
-                  <div className="save-feedback error">
-                    <AlertCircle size={16} />
-                    <span>{saveStatus.msg}</span>
-                  </div>
-                )}
-              </div>
 
-              {record.review?.reviewedAt && (
-                <div className="previous-review-info">
-                  <span>
-                    Last recorded:{" "}
-                    <strong>{new Date(record.review.reviewedAt).toLocaleString()}</strong>
-                  </span>
-                </div>
+                  {record.review?.reviewedAt && (
+                    <div className="previous-review-info">
+                      <span>
+                        Last recorded:{" "}
+                        <strong>{new Date(record.review.reviewedAt).toLocaleString()}</strong>
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
 
-          {/* AI Diagnostics & Model Telemetry Card */}
-          <div className="telemetry-panel-card">
-            <div className="panel-header">
-              <div className="panel-title-group">
-                <Sparkles size={16} className="text-primary" />
-                <h4 className="panel-title-sm">AI Model Telemetry</h4>
-              </div>
-            </div>
-
-            <div className="telemetry-body">
-              {/* Classification Stat */}
-              <div className="telemetry-metric-item">
-                <div className="metric-header">
-                  <span className="metric-name">Classifier Decision</span>
-                  <span
-                    className={`metric-pill ${
-                      result.cls_flag ? "metric-flag-positive" : "metric-flag-negative"
-                    }`}
-                  >
-                    {result.cls_flag ? "Stone Suspected" : "No Stone Suspected"}
-                  </span>
-                </div>
-                <div className="prob-bar-container">
-                  <div
-                    className={`prob-bar-fill ${result.cls_flag ? "fill-positive" : "fill-negative"}`}
-                    style={{ width: `${Math.min(100, (result.p_stone || 0) * 100)}%` }}
-                  />
-                </div>
-                <div className="metric-subtext">
-                  <span>Calibrated Probability: <strong>{((result.p_stone || 0) * 100).toFixed(1)}%</strong></span>
-                  <span>Threshold: {(result.cls_threshold || 0).toFixed(3)}</span>
+          {/* AI Diagnostics & Model Telemetry Card (Shown when analyzed) */}
+          {!isPending && (
+            <div className="telemetry-panel-card">
+              <div className="panel-header">
+                <div className="panel-title-group">
+                  <Sparkles size={16} className="text-primary" />
+                  <h4 className="panel-title-sm">AI Model Telemetry</h4>
                 </div>
               </div>
 
-              {/* Detected Boxes List */}
-              <div className="telemetry-metric-item">
-                <div className="metric-header">
-                  <span className="metric-name">Detected Regions of Interest</span>
-                  <span className="metric-val">{boxes.length} localized</span>
-                </div>
-
-                {boxes.length > 0 ? (
-                  <div className="boxes-breakdown-list">
-                    {boxes.map((b, idx) => (
-                      <div
-                        key={idx}
-                        className={`box-item-row ${hoveredBoxIdx === idx ? "hovered" : ""}`}
-                        onMouseEnter={() => setHoveredBoxIdx(idx)}
-                        onMouseLeave={() => setHoveredBoxIdx(null)}
-                      >
-                        <div className="box-item-title">
-                          <span className="box-item-badge">#{idx + 1}</span>
-                          <span className="box-conf-text">
-                            Confidence: <strong>{(b.conf * 100).toFixed(1)}%</strong>
-                          </span>
-                        </div>
-                        <div className="box-coords-text">
-                          [{Math.round(b.x1)}, {Math.round(b.y1)}] to [{Math.round(b.x2)}, {Math.round(b.y2)}]
-                        </div>
-                      </div>
-                    ))}
+              <div className="telemetry-body">
+                {/* Classification Stat */}
+                <div className="telemetry-metric-item">
+                  <div className="metric-header">
+                    <span className="metric-name">Classifier Decision</span>
+                    <span
+                      className={`metric-pill ${
+                        result.cls_flag ? "metric-flag-positive" : "metric-flag-negative"
+                      }`}
+                    >
+                      {result.cls_flag ? "Stone Suspected" : "No Stone Suspected"}
+                    </span>
                   </div>
-                ) : (
-                  <p className="no-boxes-text">No bounding boxes detected above threshold.</p>
-                )}
-              </div>
-
-              {/* Model Specs */}
-              <div className="model-specs-footer">
-                <div className="spec-row">
-                  <span className="spec-label">Classifier:</span>
-                  <span className="spec-value">{result.models?.classifier || "tf_efficientnetv2_s"}</span>
+                  <div className="prob-bar-container">
+                    <div
+                      className={`prob-bar-fill ${result.cls_flag ? "fill-positive" : "fill-negative"}`}
+                      style={{ width: `${Math.min(100, (result.p_stone || 0) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="metric-subtext">
+                    <span>
+                      Calibrated Probability:{" "}
+                      <strong>{((result.p_stone || 0) * 100).toFixed(1)}%</strong>
+                    </span>
+                    <span>Threshold: {(result.cls_threshold || 0).toFixed(3)}</span>
+                  </div>
                 </div>
-                <div className="spec-row">
-                  <span className="spec-label">Detector:</span>
-                  <span className="spec-value">{result.models?.detector || "yolo11s_960_synth_s1"}</span>
+
+                {/* Detected Boxes List */}
+                <div className="telemetry-metric-item">
+                  <div className="metric-header">
+                    <span className="metric-name">Detected Regions of Interest</span>
+                    <span className="metric-val">{boxes.length} localized</span>
+                  </div>
+
+                  {boxes.length > 0 ? (
+                    <div className="boxes-breakdown-list">
+                      {boxes.map((b, idx) => (
+                        <div
+                          key={idx}
+                          className={`box-item-row ${hoveredBoxIdx === idx ? "hovered" : ""}`}
+                          onMouseEnter={() => setHoveredBoxIdx(idx)}
+                          onMouseLeave={() => setHoveredBoxIdx(null)}
+                        >
+                          <div className="box-item-title">
+                            <span className="box-item-badge">#{idx + 1}</span>
+                            <span className="box-conf-text">
+                              Confidence: <strong>{(b.conf * 100).toFixed(1)}%</strong>
+                            </span>
+                          </div>
+                          <div className="box-coords-text">
+                            [{Math.round(b.x1)}, {Math.round(b.y1)}] to [{Math.round(b.x2)}, {Math.round(b.y2)}]
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="no-boxes-text">No bounding boxes detected above threshold.</p>
+                  )}
+                </div>
+
+                {/* Model Specs */}
+                <div className="model-specs-footer">
+                  <div className="spec-row">
+                    <span className="spec-label">Classifier:</span>
+                    <span className="spec-value">{result.models?.classifier || "tf_efficientnetv2_s"}</span>
+                  </div>
+                  <div className="spec-row">
+                    <span className="spec-label">Detector:</span>
+                    <span className="spec-value">{result.models?.detector || "yolo11s_960_synth_s1"}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </aside>
       </div>
 

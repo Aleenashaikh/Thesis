@@ -11,6 +11,8 @@ import {
   FileCheck,
   Cpu,
   Info,
+  Clock,
+  Zap,
 } from "lucide-react";
 import BoxedImage from "./BoxedImage";
 
@@ -90,7 +92,7 @@ export default function UploadScreen({
         onAnalyzeSuccess(result);
       }
     } catch (err) {
-      setError(err.message || "Detection failed. Please check your network connection.");
+      setError(err.message || "Upload failed. Please check your network connection.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -101,6 +103,8 @@ export default function UploadScreen({
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
     return (bytes / (1024 * 1024)).toFixed(2) + " MB";
   }
+
+  const isPending = lastAnalysis && (lastAnalysis.status === "pending" || !lastAnalysis.result);
 
   return (
     <div className="screen-container">
@@ -235,7 +239,7 @@ export default function UploadScreen({
               {isAnalyzing ? (
                 <>
                   <RefreshCw size={18} className="spin-icon" />
-                  <span>Processing Scan with AI Models...</span>
+                  <span>Processing & Uploading Scan...</span>
                 </>
               ) : (
                 <>
@@ -245,7 +249,7 @@ export default function UploadScreen({
               )}
             </button>
             <p className="analyze-caption">
-              Runs dual-stage inference: EfficientNetV2 Classifier + YOLO11s Detector
+              Uploads to secure storage. If AI model is online, runs dual-stage inference immediately.
             </p>
           </div>
 
@@ -258,7 +262,7 @@ export default function UploadScreen({
             <ul className="guidance-list">
               <li>Upload high-contrast full-resolution radiograph or slice.</li>
               <li>Ensure patient identifiers (PHI) are anonymized before uploading.</li>
-              <li>Dual-energy or contrast-enhanced scans may produce artifacts.</li>
+              <li>If the model is offline, the image is saved under <em>Pending Analysis</em> to detect later.</li>
             </ul>
           </div>
         </div>
@@ -267,81 +271,135 @@ export default function UploadScreen({
         <div className="upload-preview-card">
           <div className="card-header-bar">
             <span className="card-header-title">
-              {lastAnalysis ? "Detection Output" : previewUrl ? "Scan Preview" : "Image Viewport"}
+              {lastAnalysis
+                ? isPending
+                  ? "Scan Saved (Pending Detection)"
+                  : "Detection Output"
+                : previewUrl
+                ? "Scan Preview"
+                : "Image Viewport"}
             </span>
             {file && (
-              <span className="viewport-status-badge">
-                {lastAnalysis ? "Analyzed" : "Ready for Analysis"}
+              <span className={`viewport-status-badge ${isPending ? "status-pending" : ""}`}>
+                {lastAnalysis
+                  ? isPending
+                    ? "Pending Analysis"
+                    : "Analyzed"
+                  : "Ready for Analysis"}
               </span>
             )}
           </div>
 
           <div className="preview-viewport-content">
             {lastAnalysis ? (
-              <div className="analysis-result-container">
-                {/* Result Summary Banner */}
-                <div
-                  className={`result-verdict-banner ${
-                    lastAnalysis.result.cls_flag ? "banner-positive" : "banner-negative"
-                  }`}
-                >
-                  <div className="banner-icon-col">
-                    {lastAnalysis.result.cls_flag ? (
-                      <AlertCircle size={28} />
-                    ) : (
-                      <CheckCircle2 size={28} />
-                    )}
+              isPending ? (
+                /* Saved as Pending when model is offline */
+                <div className="analysis-result-container">
+                  <div className="result-verdict-banner banner-pending">
+                    <div className="banner-icon-col">
+                      <Clock size={28} />
+                    </div>
+                    <div className="banner-details-col">
+                      <span className="banner-title">Saved · Pending Model Analysis</span>
+                      <span className="banner-subtitle">
+                        Radiograph saved to cloud archive. The model service is currently offline. When you open this scan in <strong>Case Records</strong>, it will automatically detect stones and request your clinical review.
+                      </span>
+                    </div>
+                    <button
+                      className="btn-view-record"
+                      onClick={() => onGoToRecord(lastAnalysis._id)}
+                    >
+                      <span>Open Case</span>
+                      <ChevronRight size={16} />
+                    </button>
                   </div>
-                  <div className="banner-details-col">
-                    <span className="banner-title">
-                      {lastAnalysis.result.cls_flag
-                        ? "Calculus Detected / Suspected"
-                        : "No Calculus Suspected"}
-                    </span>
-                    <span className="banner-subtitle">
-                      Model probability:{" "}
-                      <strong>{(lastAnalysis.result.p_stone * 100).toFixed(1)}%</strong>
-                      {" · "}
-                      Detected boxes:{" "}
-                      <strong>{lastAnalysis.result.boxes.length}</strong>
-                    </span>
+
+                  <div className="viewport-image-box">
+                    <img
+                      src={lastAnalysis.imageUrl}
+                      alt="Uploaded scan"
+                      className="raw-preview-img"
+                    />
                   </div>
-                  <button
-                    className="btn-view-record"
-                    onClick={() => onGoToRecord(lastAnalysis._id)}
-                  >
-                    <span>Open Case & Review</span>
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
 
-                {/* Boxed Image Presentation */}
-                <div className="viewport-image-box">
-                  <BoxedImage
-                    src={lastAnalysis.imageUrl}
-                    width={lastAnalysis.width}
-                    height={lastAnalysis.height}
-                    boxes={lastAnalysis.result.boxes}
-                    showBoxes={true}
-                    showConfidence={true}
-                  />
+                  <div className="result-quick-actions">
+                    <button className="btn-secondary" onClick={handleClearFile}>
+                      <RefreshCw size={15} />
+                      <span>Upload Another Scan</span>
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={() => onGoToRecord(lastAnalysis._id)}
+                    >
+                      <FileCheck size={16} />
+                      <span>Go to Case Record & Run Detection</span>
+                    </button>
+                  </div>
                 </div>
-
-                {/* Quick Action Footer */}
-                <div className="result-quick-actions">
-                  <button className="btn-secondary" onClick={handleClearFile}>
-                    <RefreshCw size={15} />
-                    <span>Upload Another Scan</span>
-                  </button>
-                  <button
-                    className="btn-primary"
-                    onClick={() => onGoToRecord(lastAnalysis._id)}
+              ) : (
+                /* Model was online and analyzed successfully */
+                <div className="analysis-result-container">
+                  <div
+                    className={`result-verdict-banner ${
+                      lastAnalysis.result?.cls_flag ? "banner-positive" : "banner-negative"
+                    }`}
                   >
-                    <FileCheck size={16} />
-                    <span>Go to Record & Specialist Review</span>
-                  </button>
+                    <div className="banner-icon-col">
+                      {lastAnalysis.result?.cls_flag ? (
+                        <AlertCircle size={28} />
+                      ) : (
+                        <CheckCircle2 size={28} />
+                      )}
+                    </div>
+                    <div className="banner-details-col">
+                      <span className="banner-title">
+                        {lastAnalysis.result?.cls_flag
+                          ? "Calculus Detected / Suspected"
+                          : "No Calculus Suspected"}
+                      </span>
+                      <span className="banner-subtitle">
+                        Model probability:{" "}
+                        <strong>{((lastAnalysis.result?.p_stone || 0) * 100).toFixed(1)}%</strong>
+                        {" · "}
+                        Detected boxes:{" "}
+                        <strong>{lastAnalysis.result?.boxes?.length || 0}</strong>
+                      </span>
+                    </div>
+                    <button
+                      className="btn-view-record"
+                      onClick={() => onGoToRecord(lastAnalysis._id)}
+                    >
+                      <span>Open Case & Review</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+
+                  <div className="viewport-image-box">
+                    <BoxedImage
+                      src={lastAnalysis.imageUrl}
+                      width={lastAnalysis.width}
+                      height={lastAnalysis.height}
+                      boxes={lastAnalysis.result?.boxes || []}
+                      showBoxes={true}
+                      showConfidence={true}
+                    />
+                  </div>
+
+                  <div className="result-quick-actions">
+                    <button className="btn-secondary" onClick={handleClearFile}>
+                      <RefreshCw size={15} />
+                      <span>Upload Another Scan</span>
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={() => onGoToRecord(lastAnalysis._id)}
+                    >
+                      <FileCheck size={16} />
+                      <span>Go to Record & Specialist Review</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )
             ) : previewUrl ? (
               <div className="viewport-image-box">
                 <img src={previewUrl} alt="Preview" className="raw-preview-img" />

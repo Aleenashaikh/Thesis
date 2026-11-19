@@ -16,6 +16,7 @@ import {
   CheckCheck,
   ArrowUpDown,
   SlidersHorizontal,
+  Zap,
 } from "lucide-react";
 import RecordDetailView from "./RecordDetailView";
 import CustomSelect from "./CustomSelect";
@@ -31,7 +32,7 @@ export default function RecordsScreen({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [modalityFilter, setModalityFilter] = useState("ALL"); // ALL | XRAY | CT
-  const [verdictFilter, setVerdictFilter] = useState("ALL"); // ALL | pending | correct | partly | incorrect
+  const [verdictFilter, setVerdictFilter] = useState("ALL"); // ALL | pending-analysis | pending-review | correct | partly | incorrect
   const [sortBy, setSortBy] = useState("newest"); // newest | oldest
 
   // Find active record if activeRecordId is specified
@@ -43,17 +44,16 @@ export default function RecordsScreen({
   // High-level statistics calculation
   const stats = useMemo(() => {
     const total = records.length;
+    const pendingAnalysis = records.filter((r) => r.status === "pending" || !r.result).length;
     const stonesDetected = records.filter((r) => r.result?.cls_flag).length;
     const reviewed = records.filter((r) => r.review?.verdict).length;
-    const pending = total - reviewed;
-    const correctCount = records.filter((r) => r.review?.verdict === "correct").length;
+    const pendingReview = records.filter((r) => r.result && !r.review?.verdict).length;
     return {
       total,
+      pendingAnalysis,
       stonesDetected,
-      stonesRate: total > 0 ? ((stonesDetected / total) * 100).toFixed(0) : 0,
       reviewed,
-      pending,
-      correctCount,
+      pendingReview,
     };
   }, [records]);
 
@@ -66,7 +66,8 @@ export default function RecordsScreen({
 
   const verdictOptions = [
     { value: "ALL", label: "All Statuses", badgeColor: "#94a3b8" },
-    { value: "pending", label: "Pending Review", badgeColor: "#f59e0b" },
+    { value: "pending-analysis", label: "Pending Analysis (Model Offline)", badgeColor: "#6366f1" },
+    { value: "pending-review", label: "Pending Specialist Review", badgeColor: "#f59e0b" },
     { value: "correct", label: "Correct", badgeColor: "#10b981" },
     { value: "partly", label: "Partly Correct", badgeColor: "#f59e0b" },
     { value: "incorrect", label: "Incorrect", badgeColor: "#ef4444" },
@@ -86,9 +87,11 @@ export default function RecordsScreen({
           return false;
         }
 
-        // Verdict filter
-        if (verdictFilter === "pending") {
-          if (r.review?.verdict) return false;
+        // Status / Verdict filter
+        if (verdictFilter === "pending-analysis") {
+          if (r.status !== "pending" && r.result) return false;
+        } else if (verdictFilter === "pending-review") {
+          if (!r.result || r.review?.verdict) return false;
         } else if (verdictFilter !== "ALL") {
           if (r.review?.verdict !== verdictFilter) return false;
         }
@@ -160,28 +163,26 @@ export default function RecordsScreen({
           </div>
           <div className="stat-data">
             <span className="stat-value">{stats.total}</span>
-            <span className="stat-label">Total Scans Ingested</span>
+            <span className="stat-label">Total Ingested Scans</span>
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-red">
-            <AlertCircle size={20} />
+          <div className="stat-icon-wrap stat-icon-indigo">
+            <Clock size={20} />
           </div>
           <div className="stat-data">
-            <span className="stat-value">
-              {stats.stonesDetected} <span className="stat-sub">({stats.stonesRate}%)</span>
-            </span>
-            <span className="stat-label">Calculi Suspected</span>
+            <span className="stat-value">{stats.pendingAnalysis}</span>
+            <span className="stat-label">Pending Model Analysis</span>
           </div>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon-wrap stat-icon-amber">
-            <Clock size={20} />
+            <Sparkles size={20} />
           </div>
           <div className="stat-data">
-            <span className="stat-value">{stats.pending}</span>
+            <span className="stat-value">{stats.pendingReview}</span>
             <span className="stat-label">Pending Specialist Review</span>
           </div>
         </div>
@@ -232,7 +233,7 @@ export default function RecordsScreen({
 
           {/* Status Custom Dropdown */}
           <CustomSelect
-            label="Review Status:"
+            label="Status:"
             icon={SlidersHorizontal}
             value={verdictFilter}
             onChange={setVerdictFilter}
@@ -272,6 +273,14 @@ export default function RecordsScreen({
           >
             🩺 CT Slice ({records.filter((r) => r.modality === "CT").length})
           </button>
+          {stats.pendingAnalysis > 0 && (
+            <button
+              className={`quick-chip-btn chip-pending ${verdictFilter === "pending-analysis" ? "is-active" : ""}`}
+              onClick={() => setVerdictFilter(verdictFilter === "pending-analysis" ? "ALL" : "pending-analysis")}
+            >
+              ⏳ Pending Detection ({stats.pendingAnalysis})
+            </button>
+          )}
         </div>
       </div>
 
@@ -298,6 +307,7 @@ export default function RecordsScreen({
       {filteredRecords.length > 0 ? (
         <div className="records-cards-grid">
           {filteredRecords.map((item) => {
+            const isPendingAnalysis = item.status === "pending" || !item.result;
             const hasStone = item.result?.cls_flag;
             const boxesCount = item.result?.boxes?.length || 0;
             const verdict = item.review?.verdict;
@@ -305,7 +315,7 @@ export default function RecordsScreen({
             return (
               <div
                 key={item._id}
-                className="case-record-card"
+                className={`case-record-card ${isPendingAnalysis ? "is-pending-card" : ""}`}
                 onClick={() => setActiveRecordId(item._id)}
               >
                 {/* Thumbnail Preview with Overlay */}
@@ -324,6 +334,12 @@ export default function RecordsScreen({
                       {boxesCount} {boxesCount === 1 ? "box" : "boxes"}
                     </span>
                   )}
+                  {isPendingAnalysis && (
+                    <span className="thumb-pending-tag">
+                      <Clock size={11} />
+                      <span>Pending Analysis</span>
+                    </span>
+                  )}
                 </div>
 
                 {/* Card Info */}
@@ -338,30 +354,39 @@ export default function RecordsScreen({
                     </span>
                   </div>
 
-                  {/* Classification Pill */}
+                  {/* Status / Classification Row */}
                   <div className="card-status-row">
-                    <span
-                      className={`verdict-pill ${
-                        hasStone ? "pill-stone-detected" : "pill-no-stone"
-                      }`}
-                    >
-                      {hasStone ? (
-                        <>
-                          <AlertCircle size={13} />
-                          <span>Stone ({(item.result.p_stone * 100).toFixed(0)}%)</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 size={13} />
-                          <span>No Stone</span>
-                        </>
-                      )}
-                    </span>
+                    {isPendingAnalysis ? (
+                      <span className="verdict-pill pill-pending-analysis">
+                        <Clock size={13} />
+                        <span>Awaiting Detection</span>
+                      </span>
+                    ) : (
+                      <span
+                        className={`verdict-pill ${
+                          hasStone ? "pill-stone-detected" : "pill-no-stone"
+                        }`}
+                      >
+                        {hasStone ? (
+                          <>
+                            <AlertCircle size={13} />
+                            <span>Stone ({((item.result?.p_stone || 0) * 100).toFixed(0)}%)</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 size={13} />
+                            <span>No Stone</span>
+                          </>
+                        )}
+                      </span>
+                    )}
 
                     {/* Specialist Review Status Badge */}
                     <span
                       className={`review-badge-pill ${
-                        verdict === "correct"
+                        isPendingAnalysis
+                          ? "review-not-analyzed"
+                          : verdict === "correct"
                           ? "review-correct"
                           : verdict === "partly"
                           ? "review-partly"
@@ -370,13 +395,15 @@ export default function RecordsScreen({
                           : "review-pending"
                       }`}
                     >
-                      {verdict === "correct"
+                      {isPendingAnalysis
+                        ? "Not Analyzed"
+                        : verdict === "correct"
                         ? "Correct"
                         : verdict === "partly"
                         ? "Partly"
                         : verdict === "incorrect"
                         ? "Incorrect"
-                        : "Pending"}
+                        : "Pending Review"}
                     </span>
                   </div>
 
@@ -389,7 +416,9 @@ export default function RecordsScreen({
 
                   {/* Card Action */}
                   <div className="card-footer-action">
-                    <span className="action-prompt">Open & Review</span>
+                    <span className="action-prompt">
+                      {isPendingAnalysis ? "Detect & Review" : "Open & Review"}
+                    </span>
                     <ChevronRight size={15} />
                   </div>
                 </div>

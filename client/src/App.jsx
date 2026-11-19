@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Navbar from "./components/Navbar";
 import UploadScreen from "./components/UploadScreen";
 import RecordsScreen from "./components/RecordsScreen";
+import StatsScreen from "./components/StatsScreen";
 import LoginScreen from "./components/LoginScreen";
 import { getApiUrl } from "./config/api";
 
@@ -9,7 +10,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
     () => sessionStorage.getItem("isAuthenticated") === "true"
   );
-  const [currentScreen, setCurrentScreen] = useState("upload"); // "upload" | "records"
+  const [currentScreen, setCurrentScreen] = useState("upload"); // "upload" | "records" | "stats"
   const [activeRecordId, setActiveRecordId] = useState(null);
   const [records, setRecords] = useState([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
@@ -51,9 +52,14 @@ export default function App() {
     }
   }, [isAuthenticated, loadRecords]);
 
+  // Count of cases pending model detection
+  const pendingCount = useMemo(() => {
+    return records.filter((r) => r.status === "pending" || !r.result).length;
+  }, [records]);
+
   // Handle successful upload in Screen 1
   function handleAnalyzeSuccess(newRecord) {
-    setRecords((prev) => [newRecord, ...prev]);
+    setRecords((prev) => [newRecord, ...prev.filter((r) => r._id !== newRecord._id)]);
   }
 
   // Navigate to a specific record in Screen 2
@@ -62,7 +68,7 @@ export default function App() {
     setCurrentScreen("records");
   }
 
-  // Update record in list after specialist review
+  // Update record in list after specialist review or re-analysis
   function handleReviewSaved(updatedRecord) {
     setRecords((prev) =>
       prev.map((r) => (r._id === updatedRecord._id ? updatedRecord : r))
@@ -92,6 +98,7 @@ export default function App() {
           }
         }}
         recordsCount={records.length}
+        pendingCount={pendingCount}
         onLogout={handleLogout}
       />
 
@@ -103,7 +110,7 @@ export default function App() {
             onGoToRecord={handleGoToRecord}
             apiCall={apiCall}
           />
-        ) : (
+        ) : currentScreen === "records" ? (
           <RecordsScreen
             records={records}
             loading={loadingRecords}
@@ -112,6 +119,11 @@ export default function App() {
             setActiveRecordId={setActiveRecordId}
             onReviewSaved={handleReviewSaved}
             apiCall={apiCall}
+          />
+        ) : (
+          <StatsScreen
+            apiCall={apiCall}
+            onGoToRecord={handleGoToRecord}
           />
         )}
       </main>

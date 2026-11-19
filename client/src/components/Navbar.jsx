@@ -2,16 +2,19 @@ import { useState } from "react";
 import {
   UploadCloud,
   FileSpreadsheet,
+  BarChart3,
   ShieldAlert,
   Activity,
   LogOut,
   X,
+  Clock,
 } from "lucide-react";
 
 export default function Navbar({
   currentScreen,
   setCurrentScreen,
   recordsCount = 0,
+  pendingCount = 0,
   onLogout,
 }) {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -50,6 +53,20 @@ export default function Navbar({
               {recordsCount > 0 && (
                 <span className="tab-counter-badge">{recordsCount}</span>
               )}
+              {pendingCount > 0 && (
+                <span className="tab-pending-badge" title={`${pendingCount} scan(s) pending model detection`}>
+                  <Clock size={11} />
+                  <span>{pendingCount}</span>
+                </span>
+              )}
+            </button>
+
+            <button
+              className={`nav-tab-btn ${currentScreen === "stats" ? "active" : ""}`}
+              onClick={() => setCurrentScreen("stats")}
+            >
+              <BarChart3 size={18} />
+              <span>Statistics</span>
             </button>
           </nav>
 
