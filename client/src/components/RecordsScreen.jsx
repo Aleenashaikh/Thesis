@@ -87,26 +87,26 @@ export default function RecordsScreen({
           return false;
         }
 
-        // Status / Verdict filter
-        if (verdictFilter === "pending-analysis") {
-          if (r.status !== "pending" && r.result) return false;
-        } else if (verdictFilter === "pending-review") {
-          if (!r.result || r.review?.verdict) return false;
-        } else if (verdictFilter !== "ALL") {
-          if (r.review?.verdict !== verdictFilter) return false;
-        }
+          // Status / Verdict filter
+          if (verdictFilter === "pending-analysis") {
+            if (r.status !== "pending" && r.result) return false;
+          } else if (verdictFilter === "pending-review") {
+            if (!r.result || r.review?.verdict) return false;
+          } else if (verdictFilter !== "ALL") {
+            if (r.review?.verdict !== verdictFilter) return false;
+          }
 
-        // Search query
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          const idMatch = r._id?.toLowerCase().includes(q);
-          const notesMatch = r.review?.notes?.toLowerCase().includes(q);
-          const modalityMatch = r.modality?.toLowerCase().includes(q);
-          if (!idMatch && !notesMatch && !modalityMatch) return false;
-        }
+          // Search query
+          if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            const idMatch = r._id?.toLowerCase().includes(q);
+            const notesMatch = r.review?.notes?.toLowerCase().includes(q);
+            const modalityMatch = r.modality?.toLowerCase().includes(q);
+            if (!idMatch && !notesMatch && !modalityMatch) return false;
+          }
 
-        return true;
-      })
+          return true;
+        })
       .sort((a, b) => {
         const timeA = new Date(a.createdAt).getTime();
         const timeB = new Date(b.createdAt).getTime();
@@ -168,241 +168,239 @@ export default function RecordsScreen({
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-indigo">
-            <Clock size={20} />
+            <div className="stat-icon-wrap stat-icon-indigo">
+              <Clock size={20} />
+            </div>
+            <div className="stat-data">
+              <span className="stat-value">{stats.pendingAnalysis}</span>
+              <span className="stat-label">Pending Model Analysis</span>
+            </div>
           </div>
-          <div className="stat-data">
-            <span className="stat-value">{stats.pendingAnalysis}</span>
-            <span className="stat-label">Pending Model Analysis</span>
+
+          <div className="stat-card">
+            <div className="stat-icon-wrap stat-icon-amber">
+              <Sparkles size={20} />
+            </div>
+            <div className="stat-data">
+              <span className="stat-value">{stats.pendingReview}</span>
+              <span className="stat-label">Pending Specialist Review</span>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon-wrap stat-icon-green">
+              <CheckCheck size={20} />
+            </div>
+            <div className="stat-data">
+              <span className="stat-value">{stats.reviewed}</span>
+              <span className="stat-label">Reviews Finalized</span>
+            </div>
           </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-amber">
-            <Sparkles size={20} />
-          </div>
-          <div className="stat-data">
-            <span className="stat-value">{stats.pendingReview}</span>
-            <span className="stat-label">Pending Specialist Review</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon-wrap stat-icon-green">
-            <CheckCheck size={20} />
-          </div>
-          <div className="stat-data">
-            <span className="stat-value">{stats.reviewed}</span>
-            <span className="stat-label">Reviews Finalized</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Modern Filter Toolbar */}
-      <div className="records-control-bar">
-        {/* Search Input Box */}
-        <div className="search-input-box">
-          <Search size={16} className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search by Case ID, notes, or modality..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="search-input"
-          />
-          {searchQuery && (
-            <button
-              className="clear-search-btn"
-              onClick={() => setSearchQuery("")}
-            >
-              ×
-            </button>
-          )}
-        </div>
-
-        {/* Custom Aesthetic Dropdown Filters */}
-        <div className="filter-controls-group">
-          {/* Modality Custom Dropdown */}
-          <CustomSelect
-            label="Modality:"
-            icon={Layers}
-            value={modalityFilter}
-            onChange={setModalityFilter}
-            options={modalityOptions}
-          />
-
-          {/* Status Custom Dropdown */}
-          <CustomSelect
-            label="Status:"
-            icon={SlidersHorizontal}
-            value={verdictFilter}
-            onChange={setVerdictFilter}
-            options={verdictOptions}
-          />
-
-          {/* Sort Custom Dropdown */}
-          <CustomSelect
-            label="Sort By:"
-            icon={ArrowUpDown}
-            value={sortBy}
-            onChange={setSortBy}
-            options={sortOptions}
-          />
-        </div>
-      </div>
-
-      {/* Quick Modality Filter Chips (One-Click Selection) */}
-      <div className="quick-filter-chips-row">
-        <span className="quick-filter-caption">Quick Modality:</span>
-        <div className="quick-chips-group">
-          <button
-            className={`quick-chip-btn ${modalityFilter === "ALL" ? "is-active" : ""}`}
-            onClick={() => setModalityFilter("ALL")}
-          >
-            All Modalities ({records.length})
-          </button>
-          <button
-            className={`quick-chip-btn ${modalityFilter === "XRAY" ? "is-active" : ""}`}
-            onClick={() => setModalityFilter("XRAY")}
-          >
-            🩻 X-Ray ({records.filter((r) => r.modality === "XRAY").length})
-          </button>
-          <button
-            className={`quick-chip-btn ${modalityFilter === "CT" ? "is-active" : ""}`}
-            onClick={() => setModalityFilter("CT")}
-          >
-            🩺 CT Slice ({records.filter((r) => r.modality === "CT").length})
-          </button>
-          {stats.pendingAnalysis > 0 && (
-            <button
-              className={`quick-chip-btn chip-pending ${verdictFilter === "pending-analysis" ? "is-active" : ""}`}
-              onClick={() => setVerdictFilter(verdictFilter === "pending-analysis" ? "ALL" : "pending-analysis")}
-            >
-              ⏳ Pending Detection ({stats.pendingAnalysis})
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Records Count Indicator */}
-      <div className="records-count-strip">
-        <span>
-          Showing <strong>{filteredRecords.length}</strong> of <strong>{records.length}</strong> records
-        </span>
-        {(searchQuery || modalityFilter !== "ALL" || verdictFilter !== "ALL") && (
-          <button
-            className="btn-reset-filters"
-            onClick={() => {
-              setSearchQuery("");
-              setModalityFilter("ALL");
-              setVerdictFilter("ALL");
-            }}
-          >
-            Reset all filters
-          </button>
-        )}
-      </div>
-
-      {/* Grid of Case Records */}
-      {filteredRecords.length > 0 ? (
-        <div className="records-cards-grid">
-          {filteredRecords.map((item) => {
-            const isPendingAnalysis = item.status === "pending" || !item.result;
-            const hasStone = item.result?.cls_flag;
-            const boxesCount = item.result?.boxes?.length || 0;
-            const verdict = item.review?.verdict;
-
-            return (
-              <div
-                key={item._id}
-                className={`case-record-card ${isPendingAnalysis ? "is-pending-card" : ""}`}
-                onClick={() => setActiveRecordId(item._id)}
+        {/* Modern Filter Toolbar */}
+        <div className="records-control-bar">
+          {/* Search Input Box */}
+          <div className="search-input-box">
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search by Case ID, notes, or modality..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+            {searchQuery && (
+              <button
+                className="clear-search-btn"
+                onClick={() => setSearchQuery("")}
               >
-                {/* Thumbnail Preview with Overlay */}
-                <div className="card-thumb-container">
-                  <img
-                    src={item.imageUrl}
-                    alt="Case thumbnail"
-                    className="card-thumb-img"
-                    loading="lazy"
-                  />
-                  <span className={`thumb-modality-pill ${item.modality === "XRAY" ? "badge-xray" : "badge-ct"}`}>
-                    {item.modality}
-                  </span>
-                  {boxesCount > 0 && (
-                    <span className="thumb-boxes-pill">
-                      {boxesCount} {boxesCount === 1 ? "box" : "boxes"}
-                    </span>
-                  )}
-                  {isPendingAnalysis && (
-                    <span className="thumb-pending-tag">
-                      <Clock size={11} />
-                      <span>Pending Analysis</span>
-                    </span>
-                  )}
-                </div>
+                ×
+              </button>
+            )}
+          </div>
 
-                {/* Card Info */}
-                <div className="card-details">
-                  <div className="card-meta-row">
-                    <span className="card-case-id">#{item._id.slice(-8)}</span>
-                    <span className="card-date">
-                      {new Date(item.createdAt).toLocaleDateString([], {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </span>
-                  </div>
+          {/* Custom Aesthetic Dropdown Filters */}
+          <div className="filter-controls-group">
+            {/* Modality Custom Dropdown */}
+            <CustomSelect
+              label="Modality:"
+              icon={Layers}
+              value={modalityFilter}
+              onChange={setModalityFilter}
+              options={modalityOptions}
+            />
 
-                  {/* Status / Classification Row */}
-                  <div className="card-status-row">
-                    {isPendingAnalysis ? (
-                      <span className="verdict-pill pill-pending-analysis">
-                        <Clock size={13} />
-                        <span>Awaiting Detection</span>
-                      </span>
-                    ) : (
-                      <span
-                        className={`verdict-pill ${
-                          hasStone ? "pill-stone-detected" : "pill-no-stone"
-                        }`}
-                      >
-                        {hasStone ? (
-                          <>
-                            <AlertCircle size={13} />
-                            <span>Stone ({((item.result?.p_stone || 0) * 100).toFixed(0)}%)</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 size={13} />
-                            <span>No Stone</span>
-                          </>
-                        )}
+            {/* Status Custom Dropdown */}
+            <CustomSelect
+              label="Status:"
+              icon={SlidersHorizontal}
+              value={verdictFilter}
+              onChange={setVerdictFilter}
+              options={verdictOptions}
+            />
+
+            {/* Sort Custom Dropdown */}
+            <CustomSelect
+              label="Sort By:"
+              icon={ArrowUpDown}
+              value={sortBy}
+              onChange={setSortBy}
+              options={sortOptions}
+            />
+          </div>
+        </div>
+
+        {/* Quick Modality Filter Chips (One-Click Selection) */}
+        <div className="quick-filter-chips-row">
+          <span className="quick-filter-caption">Quick Modality:</span>
+          <div className="quick-chips-group">
+            <button
+              className={`quick-chip-btn ${modalityFilter === "ALL" ? "is-active" : ""}`}
+              onClick={() => setModalityFilter("ALL")}
+            >
+              All Modalities ({records.length})
+            </button>
+            <button
+              className={`quick-chip-btn ${modalityFilter === "XRAY" ? "is-active" : ""}`}
+              onClick={() => setModalityFilter("XRAY")}
+            >
+              🩻 X-Ray ({records.filter((r) => r.modality === "XRAY").length})
+            </button>
+            <button
+              className={`quick-chip-btn ${modalityFilter === "CT" ? "is-active" : ""}`}
+              onClick={() => setModalityFilter("CT")}
+            >
+              🩺 CT Slice ({records.filter((r) => r.modality === "CT").length})
+            </button>
+            {stats.pendingAnalysis > 0 && (
+              <button
+                className={`quick-chip-btn chip-pending ${verdictFilter === "pending-analysis" ? "is-active" : ""}`}
+                onClick={() => setVerdictFilter(verdictFilter === "pending-analysis" ? "ALL" : "pending-analysis")}
+              >
+                ⏳ Pending Detection ({stats.pendingAnalysis})
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Records Count Indicator */}
+        <div className="records-count-strip">
+          <span>
+            Showing <strong>{filteredRecords.length}</strong> of <strong>{records.length}</strong> records
+          </span>
+          {(searchQuery || modalityFilter !== "ALL" || verdictFilter !== "ALL") && (
+            <button
+              className="btn-reset-filters"
+              onClick={() => {
+                setSearchQuery("");
+                setModalityFilter("ALL");
+                setVerdictFilter("ALL");
+              }}
+            >
+              Reset all filters
+            </button>
+          )}
+        </div>
+
+        {/* Grid of Case Records */}
+        {filteredRecords.length > 0 ? (
+          <div className="records-cards-grid">
+            {filteredRecords.map((item) => {
+              const isPendingAnalysis = item.status === "pending" || !item.result;
+              const hasStone = item.result?.cls_flag;
+              const boxesCount = item.result?.boxes?.length || 0;
+              const verdict = item.review?.verdict;
+
+              return (
+                <div
+                  key={item._id}
+                  className={`case-record-card ${isPendingAnalysis ? "is-pending-card" : ""}`}
+                  onClick={() => setActiveRecordId(item._id)}
+                >
+                  {/* Thumbnail Preview with Overlay */}
+                  <div className="card-thumb-container">
+                    <img
+                      src={item.imageUrl}
+                      alt="Case thumbnail"
+                      className="card-thumb-img"
+                      loading="lazy"
+                    />
+                    <span className={`thumb-modality-pill ${item.modality === "XRAY" ? "badge-xray" : "badge-ct"}`}>
+                      {item.modality}
+                    </span>
+                    {boxesCount > 0 && (
+                      <span className="thumb-boxes-pill">
+                        {boxesCount} {boxesCount === 1 ? "box" : "boxes"}
                       </span>
                     )}
+                    {isPendingAnalysis && (
+                      <span className="thumb-pending-tag">
+                        <Clock size={11} />
+                        <span>Pending Analysis</span>
+                      </span>
+                    )}
+                  </div>
 
-                    {/* Specialist Review Status Badge */}
-                    <span
-                      className={`review-badge-pill ${
+                  {/* Card Info */}
+                  <div className="card-details">
+                    <div className="card-meta-row">
+                      <span className="card-case-id">#{item._id.slice(-8)}</span>
+                      <span className="card-date">
+                        {new Date(item.createdAt).toLocaleDateString([], {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    </div>
+
+                    {/* Status / Classification Row */}
+                    <div className="card-status-row">
+                      {isPendingAnalysis ? (
+                        <span className="verdict-pill pill-pending-analysis">
+                          <Clock size={13} />
+                          <span>Awaiting Detection</span>
+                        </span>
+                      ) : (
+                        <span
+                          className={`verdict-pill ${hasStone ? "pill-stone-detected" : "pill-no-stone"
+                            }`}
+                        >
+                          {hasStone ? (
+                            <>
+                              <AlertCircle size={13} />
+                              <span>Stone ({((item.result?.p_stone || 0) * 100).toFixed(0)}%)</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 size={13} />
+                              <span>No Stone</span>
+                            </>
+                          )}
+                        </span>
+                      )}
+
+                      {/* Specialist Review Status Badge */}
+                      <span
                         isPendingAnalysis
                           ? "review-not-analyzed"
-                          : verdict === "correct"
-                          ? "review-correct"
-                          : verdict === "partly"
-                          ? "review-partly"
-                          : verdict === "incorrect"
-                          ? "review-incorrect"
-                          : "review-pending"
+                      : verdict === "correct"
+                      ? "review-correct"
+                      : verdict === "partly"
+                      ? "review-partly"
+                      : verdict === "incorrect"
+                      ? "review-incorrect"
+                      : "review-pending"
                       }`}
                     >
                       {isPendingAnalysis
                         ? "Not Analyzed"
                         : verdict === "correct"
-                        ? "Correct"
-                        : verdict === "partly"
-                        ? "Partly"
-                        : verdict === "incorrect"
-                        ? "Incorrect"
+                          ? "Correct"
+                          : verdict === "partly"
+                            ? "Partly"
+                            : verdict === "incorrect"
+                              ? "Incorrect"
                         : "Pending Review"}
                     </span>
                   </div>
@@ -423,33 +421,33 @@ export default function RecordsScreen({
                   </div>
                 </div>
               </div>
-            );
+        );
           })}
-        </div>
+      </div>
       ) : (
-        <div className="empty-records-box">
-          <div className="empty-icon-circle">
-            <FolderOpen size={36} />
-          </div>
-          <h3>No Records Found</h3>
-          <p>
-            {records.length === 0
-              ? "No scan records exist yet in the database. Head to Screen 1 to upload and detect your first radiograph!"
-              : "No cases match your active filters or search terms. Try resetting your search filters."}
-          </p>
-          {(searchQuery || modalityFilter !== "ALL" || verdictFilter !== "ALL") && (
-            <button
-              className="btn-primary"
-              onClick={() => {
-                setSearchQuery("");
-                setModalityFilter("ALL");
-                setVerdictFilter("ALL");
-              }}
-            >
-              Clear All Filters
-            </button>
-          )}
+      <div className="empty-records-box">
+        <div className="empty-icon-circle">
+          <FolderOpen size={36} />
         </div>
+        <h3>No Records Found</h3>
+        <p>
+          {records.length === 0
+            ? "No scan records exist yet in the database. Head to Screen 1 to upload and detect your first radiograph!"
+            : "No cases match your active filters or search terms. Try resetting your search filters."}
+        </p>
+        {(searchQuery || modalityFilter !== "ALL" || verdictFilter !== "ALL") && (
+          <button
+            className="btn-primary"
+            onClick={() => {
+              setSearchQuery("");
+              setModalityFilter("ALL");
+              setVerdictFilter("ALL");
+            }}
+          >
+            Clear All Filters
+          </button>
+        )}
+      </div>
       )}
     </div>
   );

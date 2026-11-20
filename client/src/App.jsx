@@ -110,21 +110,21 @@ export default function App() {
             onGoToRecord={handleGoToRecord}
             apiCall={apiCall}
           />
-        ) : currentScreen === "records" ? (
-          <RecordsScreen
-            records={records}
-            loading={loadingRecords}
-            onRefresh={loadRecords}
-            activeRecordId={activeRecordId}
-            setActiveRecordId={setActiveRecordId}
-            onReviewSaved={handleReviewSaved}
-            apiCall={apiCall}
-          />
+        ): currentScreen === "records" ? (
+        <RecordsScreen
+          records={records}
+          loading={loadingRecords}
+          onRefresh={loadRecords}
+          activeRecordId={activeRecordId}
+          setActiveRecordId={setActiveRecordId}
+          onReviewSaved={handleReviewSaved}
+          apiCall={apiCall}
+        />
         ) : (
-          <StatsScreen
-            apiCall={apiCall}
-            onGoToRecord={handleGoToRecord}
-          />
+        <StatsScreen
+          apiCall={apiCall}
+          onGoToRecord={handleGoToRecord}
+        />
         )}
       </main>
 

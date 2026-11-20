@@ -276,8 +276,8 @@ export default function UploadScreen({
                   ? "Scan Saved (Pending Detection)"
                   : "Detection Output"
                 : previewUrl
-                ? "Scan Preview"
-                : "Image Viewport"}
+                  ? "Scan Preview"
+                  : "Image Viewport"}
             </span>
             {file && (
               <span className={`viewport-status-badge ${isPending ? "status-pending" : ""}`}>

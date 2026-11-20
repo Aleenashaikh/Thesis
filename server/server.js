@@ -16,7 +16,14 @@ cloudinary.config({
 });
 
 const INFERENCE_URL = process.env.INFERENCE_URL || "http://localhost:8000";
+// Shared secret the model server checks (X-API-Key header). Leave unset for local dev.
+const INFERENCE_KEY = process.env.INFERENCE_KEY || "";
 const LOGIN_PIN = process.env.LOGIN_PIN || process.env.PIN || "7860";
+
+// Headers for calls to the model service: multipart headers + the API key when set.
+function inferenceHeaders(form) {
+  return INFERENCE_KEY ? { ...form.getHeaders(), "X-API-Key": INFERENCE_KEY } : form.getHeaders();
+}
 
 // ---------- database ----------
 const caseSchema = new mongoose.Schema(
@@ -133,7 +140,7 @@ app.post("/api/analyze", upload.single("image"), async (req, res) => {
       form.append("file", req.file.buffer, { filename: req.file.originalname, contentType: req.file.mimetype });
       form.append("modality", modality);
       ({ data: result } = await axios.post(`${INFERENCE_URL}/analyze`, form, {
-        headers: form.getHeaders(),
+        headers: inferenceHeaders(form),
         maxBodyLength: Infinity,
         timeout: 120000,
       }));
@@ -196,7 +203,7 @@ app.post("/api/cases/:id/run-analysis", wrap(async (req, res) => {
   let result;
   try {
     ({ data: result } = await axios.post(`${INFERENCE_URL}/analyze`, form, {
-      headers: form.getHeaders(),
+      headers: inferenceHeaders(form),
       maxBodyLength: Infinity,
       timeout: 120000,
     }));
